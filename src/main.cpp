@@ -19,9 +19,6 @@ String ACCESS_TOKEN = NODE_ACCESS_TOKEN;
 HTTPClient http;
 WiFiClientSecure client;
 
-String jsonparams;
-StaticJsonDocument<200> buff;
-
 void setupWIFI()
 {
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
@@ -48,7 +45,7 @@ void setup()
     Serial.println("------------------");
 }
 
-void postData(float humidity, float temperature, float heatIndex)
+void postData(float &humidity, float &temperature, float &heatIndex)
 {
     String endpoint = BASE + "/sensors";
 
@@ -60,6 +57,9 @@ void postData(float humidity, float temperature, float heatIndex)
     http.addHeader("Content-Type", "application/json", false, true);
     http.addHeader("Authorization", "Bearer " + ACCESS_TOKEN, false, true);
 
+    String jsonparams;
+    StaticJsonDocument<200> buff;
+
     buff["humidity"] = humidity;
     buff["temperature"] = temperature;
     buff["heatIndex"] = heatIndex;
@@ -68,38 +68,36 @@ void postData(float humidity, float temperature, float heatIndex)
 
     http.POST(jsonparams);
 
-    client.flush();
-    client.clearWriteError();
+    buff.clear();
     client.stop();
     http.end();
 }
 
 void loop()
 {
-    if (WiFi.status() == WL_CONNECTED)
+    if (WiFi.status() != WL_CONNECTED)
     {
-
-        if (timeSinceLastRead > 2000)
-        {
-            float h = dht.readHumidity();
-            float t = dht.readTemperature();
-            float f = dht.readTemperature(true);
-
-            if (isnan(h) || isnan(t) || isnan(f))
-            {
-                Serial.println("Failed to read from DHT sensor!");
-                timeSinceLastRead = 0;
-                return;
-            }
-
-            float hic = dht.computeHeatIndex(t, h, false);
-
-            timeSinceLastRead = 0;
-            postData(h, t, hic);
-            delay(1000);
-            timeSinceLastRead += 1000;
-        }
+        return;
+    }
+    if (timeSinceLastRead < 2000)
+    {
         delay(100);
         timeSinceLastRead += 100;
+        return;
     }
+
+    float h = dht.readHumidity();
+    float t = dht.readTemperature();
+
+    if (isnan(h) || isnan(t))
+    {
+        Serial.println("Failed to read from DHT sensor!");
+        timeSinceLastRead = 0;
+        return;
+    }
+
+    float hic = dht.computeHeatIndex(t, h, false);
+
+    postData(h, t, hic);
+    timeSinceLastRead = 0;
 }
