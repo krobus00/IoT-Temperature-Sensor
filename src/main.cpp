@@ -9,13 +9,18 @@
 
 // PIN DEFINE
 uint8_t DHTPin = D3;
-uint8_t LED = D0;
 DHT dht(DHTPin, DHTTYPE);
 
 int timeSinceLastRead = 0;
 
 String BASE = BASE_URL;
 String ACCESS_TOKEN = NODE_ACCESS_TOKEN;
+
+HTTPClient http;
+WiFiClientSecure client;
+
+String jsonparams;
+StaticJsonDocument<200> buff;
 
 void setupWIFI()
 {
@@ -34,7 +39,6 @@ void setupWIFI()
 void setup()
 {
     Serial.begin(115200);
-    pinMode(LED, OUTPUT);
     setupWIFI();
     dht.begin();
 
@@ -47,21 +51,14 @@ void setup()
 void postData(float humidity, float temperature, float heatIndex)
 {
     String endpoint = BASE + "/sensors";
-    String res;
-    HTTPClient http;
-    WiFiClientSecure client;
 
     client.setFingerprint(FINGERPRINT);
     client.connect(HOST, PORT);
-
     http.begin(client, endpoint);
 
     http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
-    http.addHeader("Content-Type", "application/json");
-    http.addHeader("Authorization", "Bearer " + ACCESS_TOKEN);
-
-    String jsonparams;
-    DynamicJsonDocument buff(1024);
+    http.addHeader("Content-Type", "application/json", false, true);
+    http.addHeader("Authorization", "Bearer " + ACCESS_TOKEN, false, true);
 
     buff["humidity"] = humidity;
     buff["temperature"] = temperature;
@@ -69,15 +66,11 @@ void postData(float humidity, float temperature, float heatIndex)
 
     serializeJson(buff, jsonparams);
 
-    int httpCode = http.POST(jsonparams);
-    if (httpCode == 200)
-    {
-        digitalWrite(LED, LOW);
-        delay(100);
-        digitalWrite(LED, HIGH);
-        delay(100);
-        timeSinceLastRead += 200;
-    }
+    http.POST(jsonparams);
+
+    client.flush();
+    client.clearWriteError();
+    client.stop();
     http.end();
 }
 
@@ -103,6 +96,8 @@ void loop()
 
             timeSinceLastRead = 0;
             postData(h, t, hic);
+            delay(1000);
+            timeSinceLastRead += 1000;
         }
         delay(100);
         timeSinceLastRead += 100;
